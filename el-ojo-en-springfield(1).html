@@ -1,0 +1,838 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>El Ojo en Springfield</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Bangers&family=Nunito:wght@700;900&display=swap');
+        :root { --yellow:#FFD90F; --blue:#1565C0; --dark:#0d0d0d; --red:#E53935; --green:#2E7D32; }
+        * { box-sizing:border-box; margin:0; padding:0; }
+        body { background:var(--dark); background-image:radial-gradient(ellipse at 50% 0%,#1a2a1a 0%,#0d0d0d 70%); color:white; font-family:'Nunito',sans-serif; min-height:100vh; padding:16px; }
+
+        /* Layout principal: juego a la izquierda, ranking a la derecha */
+        .page-layout { display:flex; gap:20px; justify-content:center; align-items:flex-start; width:100%; max-width:900px; margin:0 auto; }
+        .game-col { display:flex; flex-direction:column; align-items:center; flex:1; min-width:0; max-width:560px; }
+        .ranking-col { width:220px; flex-shrink:0; }
+
+        .stats-bar { display:flex; justify-content:space-between; align-items:center; width:100%; margin-bottom:10px; background:rgba(255,217,15,0.1); border:2px solid rgba(255,217,15,0.3); border-radius:12px; padding:8px 18px; font-family:'Bangers',cursive; font-size:1.3rem; letter-spacing:1px; color:var(--yellow); }
+        h1 { font-family:'Bangers',cursive; color:var(--yellow); text-shadow:3px 3px 0 #000,-1px -1px 0 #000; font-size:2rem; letter-spacing:3px; text-align:center; margin-bottom:14px; }
+        .tv-wrap { width:100%; }
+        .tv-frame { position:relative; background:#2a2a2a; border:16px solid #3a3a3a; border-radius:28px; overflow:hidden; box-shadow:0 0 40px rgba(0,0,0,0.8),inset 0 0 20px rgba(0,0,0,0.5); }
+        .screen { width:100%; aspect-ratio:4/3; background:#111; display:flex; align-items:center; justify-content:center; position:relative; overflow:hidden; }
+        .scanlines { position:absolute; inset:0; background:repeating-linear-gradient(to bottom,transparent 0px,transparent 2px,rgba(0,0,0,0.15) 2px,rgba(0,0,0,0.15) 4px); pointer-events:none; z-index:3; }
+        #episode-img { width:100%; height:100%; object-fit:cover; display:none; animation:fadeIn 0.4s ease; z-index:2; }
+        @keyframes fadeIn { from{opacity:0} to{opacity:1} }
+        #loader { font-family:'Bangers',cursive; font-size:1.4rem; color:var(--yellow); letter-spacing:3px; text-align:center; padding:20px; animation:blink 0.8s step-start infinite; }
+        @keyframes blink { 50%{opacity:0} }
+
+        /* Overlay fin de juego */
+        #game-over-overlay { position:absolute; inset:0; background:rgba(0,0,0,0.95); display:none; flex-direction:column; align-items:center; justify-content:center; z-index:20; text-align:center; padding:20px; }
+        #game-over-overlay h2 { font-family:'Bangers',cursive; color:var(--red); font-size:2.5rem; letter-spacing:2px; margin-bottom:6px; }
+        #game-over-overlay .final-pts { color:var(--yellow); font-family:'Bangers',cursive; font-size:2rem; margin-bottom:14px; }
+        #game-over-overlay .name-label { font-size:0.85rem; color:#aaa; letter-spacing:1px; text-transform:uppercase; margin-bottom:6px; }
+        #nombre-input { background:#1a1a1a; border:3px solid var(--yellow); border-radius:8px; color:white; font-family:'Nunito',sans-serif; font-size:1rem; font-weight:700; padding:10px 14px; outline:none; width:100%; max-width:240px; text-align:center; margin-bottom:14px; }
+        #nombre-input::placeholder { color:#555; }
+        .game-over-btns { display:flex; gap:10px; flex-wrap:wrap; justify-content:center; }
+        .btn-guardar { background:var(--green); color:white; border:3px solid rgba(255,255,255,0.3); padding:11px 22px; font-family:'Bangers',cursive; font-size:1.2rem; letter-spacing:1px; cursor:pointer; border-radius:8px; }
+        .btn-guardar:hover { border-color:white; }
+
+        .hint-text { text-align:center; font-size:0.8rem; color:#888; letter-spacing:2px; text-transform:uppercase; margin:10px 0 6px; width:100%; }
+        .input-wrap { display:flex; gap:8px; width:100%; margin-top:4px; }
+        .autocomplete-container { position:relative; flex:1; }
+        #titulo-input { width:100%; background:#1a1a1a; border:3px solid #444; border-radius:8px; color:white; font-family:'Nunito',sans-serif; font-size:0.95rem; font-weight:700; padding:12px 14px; outline:none; transition:border-color 0.2s; }
+        #titulo-input:focus { border-color:var(--yellow); }
+        #titulo-input:disabled { opacity:0.5; cursor:not-allowed; }
+        #titulo-input.correcto { border-color:#4CAF50; background:#1b3a1b; }
+        #titulo-input.incorrecto { border-color:var(--red); background:#3a1b1b; }
+        #sugerencias { position:absolute; top:calc(100% + 2px); left:0; right:0; background:#1e1e1e; border:2px solid var(--yellow); border-radius:8px; z-index:100; max-height:220px; overflow-y:auto; display:none; box-shadow:0 8px 24px rgba(0,0,0,0.6); }
+        .sug-item { padding:10px 14px; font-size:0.88rem; font-weight:700; cursor:pointer; border-bottom:1px solid #2a2a2a; transition:background 0.1s; }
+        .sug-item:last-child { border-bottom:none; }
+        .sug-item:hover,.sug-item.activo { background:#1a2a4a; color:var(--yellow); }
+        .sug-item mark { background:transparent; color:var(--yellow); font-weight:900; }
+        #btn-enviar { background:var(--blue); color:white; border:3px solid rgba(255,255,255,0.3); border-radius:8px; padding:12px 18px; font-family:'Bangers',cursive; font-size:1.1rem; letter-spacing:1px; cursor:pointer; transition:transform 0.1s; white-space:nowrap; }
+        #btn-enviar:hover:not(:disabled) { transform:translateY(-2px); border-color:white; }
+        #btn-enviar:disabled { opacity:0.5; cursor:not-allowed; }
+        #feedback { margin-top:10px; font-family:'Bangers',cursive; font-size:1.3rem; letter-spacing:1px; min-height:2em; text-align:center; line-height:1.3; width:100%; }
+        .btn-reintentar { background:var(--yellow); color:#000; border:3px solid #000; padding:12px 28px; font-family:'Bangers',cursive; font-size:1.3rem; letter-spacing:2px; cursor:pointer; border-radius:8px; }
+
+        /* Tabla de ranking */
+        .ranking-box { background:rgba(255,217,15,0.07); border:2px solid rgba(255,217,15,0.3); border-radius:14px; padding:14px 12px; position:sticky; top:16px; }
+        .ranking-box h2 { font-family:'Bangers',cursive; color:var(--yellow); font-size:1.3rem; letter-spacing:2px; text-align:center; margin-bottom:12px; border-bottom:2px solid rgba(255,217,15,0.2); padding-bottom:8px; }
+        .rank-list { list-style:none; }
+        .rank-item { display:flex; align-items:center; gap:8px; padding:7px 4px; border-bottom:1px solid rgba(255,255,255,0.06); font-size:0.82rem; font-weight:700; }
+        .rank-item:last-child { border-bottom:none; }
+        .rank-pos { font-family:'Bangers',cursive; font-size:1rem; width:22px; text-align:center; color:#888; flex-shrink:0; }
+        .rank-pos.gold { color:#FFD700; }
+        .rank-pos.silver { color:#C0C0C0; }
+        .rank-pos.bronze { color:#CD7F32; }
+        .rank-name { flex:1; color:#eee; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .rank-pts { font-family:'Bangers',cursive; font-size:1rem; color:var(--yellow); flex-shrink:0; }
+        .rank-empty { text-align:center; color:#555; font-size:0.8rem; padding:20px 0; }
+        .rank-loading { text-align:center; color:#666; font-size:0.75rem; padding:10px 0; animation:blink 1s step-start infinite; }
+
+        /* Nombre del jugador actual */
+        .player-tag { text-align:center; font-size:0.78rem; color:#777; margin-bottom:8px; }
+        .player-tag span { color:var(--yellow); font-weight:900; }
+        .btn-cambiar { background:none; border:none; color:#555; font-size:0.7rem; cursor:pointer; text-decoration:underline; margin-left:4px; }
+        .btn-cambiar:hover { color:#aaa; }
+
+        /* Pantalla ingreso de nombre inicial */
+        #name-screen { position:fixed; inset:0; background:rgba(0,0,0,0.97); display:flex; flex-direction:column; align-items:center; justify-content:center; z-index:200; text-align:center; padding:24px; }
+        #name-screen h2 { font-family:'Bangers',cursive; color:var(--yellow); font-size:2.2rem; letter-spacing:3px; margin-bottom:8px; text-shadow:3px 3px 0 #000; }
+        #name-screen p { color:#aaa; margin-bottom:20px; font-size:0.95rem; }
+        #name-screen-input { background:#1a1a1a; border:3px solid var(--yellow); border-radius:10px; color:white; font-family:'Nunito',sans-serif; font-size:1.1rem; font-weight:700; padding:13px 18px; outline:none; width:100%; max-width:280px; text-align:center; margin-bottom:14px; }
+        #name-screen-input::placeholder { color:#555; }
+        .btn-jugar { background:var(--yellow); color:#000; border:3px solid #000; padding:13px 36px; font-family:'Bangers',cursive; font-size:1.4rem; letter-spacing:2px; cursor:pointer; border-radius:10px; transition:transform 0.1s; }
+        .btn-jugar:hover { transform:translateY(-2px); }
+
+        /* Responsive */
+        @media (max-width: 700px) {
+            .page-layout { flex-direction:column; align-items:center; }
+            .ranking-col { width:100%; max-width:560px; }
+            .ranking-box { position:static; }
+        }
+    </style>
+</head>
+<!-- Pantalla inicial: ingreso de nombre -->
+<div id="name-screen" style="position:fixed;inset:0;background:rgba(0,0,0,0.97);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:200;text-align:center;padding:24px;">
+    <h2 style="font-family:'Bangers',cursive;color:var(--yellow);font-size:2.2rem;letter-spacing:3px;margin-bottom:8px;text-shadow:3px 3px 0 #000;">🎯 EL OJO EN SPRINGFIELD</h2>
+    <p style="color:#aaa;margin-bottom:20px;font-size:0.95rem;">¿Cómo te llamás, fanático/a?</p>
+    <input id="name-screen-input" type="text" maxlength="18" placeholder="Tu nombre o apodo..." autocomplete="off"
+        style="background:#1a1a1a;border:3px solid var(--yellow);border-radius:10px;color:white;font-family:'Nunito',sans-serif;font-size:1.1rem;font-weight:700;padding:13px 18px;outline:none;width:100%;max-width:280px;text-align:center;margin-bottom:14px;"
+        onkeydown="if(event.key==='Enter') confirmarNombre()">
+    <button onclick="confirmarNombre()" style="background:var(--yellow);color:#000;border:3px solid #000;padding:13px 36px;font-family:'Bangers',cursive;font-size:1.4rem;letter-spacing:2px;cursor:pointer;border-radius:10px;">¡A JUGAR!</button>
+</div>
+
+<div class="page-layout">
+    <!-- Columna del juego -->
+    <div class="game-col">
+        <div class="stats-bar">
+            <div>VIDAS: <span id="lives">🍩🍩🍩🍩🍩</span></div>
+            <div>PUNTOS: <span id="score">0</span></div>
+        </div>
+        <h1>🎯 EL OJO EN SPRINGFIELD</h1>
+        <div id="player-tag" style="text-align:center;font-size:0.78rem;color:#777;margin-bottom:8px;width:100%;"></div>
+        <div class="tv-wrap">
+            <div class="tv-frame">
+                <div class="scanlines"></div>
+                <div class="screen">
+                    <div id="loader">SINTONIZANDO...</div>
+                    <img id="episode-img" alt="Captura del episodio">
+                    <div id="game-over-overlay">
+                        <h2>¡FIN DEL JUEGO!</h2>
+                        <div style="color:var(--yellow);font-family:'Bangers',cursive;font-size:2rem;margin-bottom:14px;">🍩 <span id="final-score">0</span> pts</div>
+                        <div style="font-size:0.85rem;color:#aaa;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px;">Guardando como:</div>
+                        <input id="nombre-input" type="text" maxlength="18" placeholder="Tu nombre..."
+                            style="background:#1a1a1a;border:3px solid var(--yellow);border-radius:8px;color:white;font-family:'Nunito',sans-serif;font-size:1rem;font-weight:700;padding:10px 14px;outline:none;width:100%;max-width:240px;text-align:center;margin-bottom:14px;"
+                            autocomplete="off" onkeydown="if(event.key==='Enter') guardarYReiniciar()">
+                        <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:center;">
+                            <button onclick="guardarYReiniciar()" style="background:#2E7D32;color:white;border:3px solid rgba(255,255,255,0.3);padding:11px 22px;font-family:'Bangers',cursive;font-size:1.2rem;letter-spacing:1px;cursor:pointer;border-radius:8px;">💾 GUARDAR</button>
+                            <button class="btn-reintentar" onclick="reiniciarJuego()">↩ SIN GUARDAR</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <p class="hint-text">¿De qué episodio es esta escena?</p>
+        <div class="input-wrap">
+            <div class="autocomplete-container">
+                <input id="titulo-input" type="text" placeholder="Escribí palabras clave del título..."
+                       autocomplete="off" disabled
+                       oninput="mostrarSugerencias()"
+                       onkeydown="manejarTeclado(event)">
+                <div id="sugerencias"></div>
+            </div>
+            <button id="btn-enviar" onclick="enviar()" disabled>ENVIAR</button>
+        </div>
+        <div id="feedback"></div>
+    </div>
+
+    <!-- Columna del ranking -->
+    <div class="ranking-col">
+        <div class="ranking-box">
+            <h2>🏆 RANKING</h2>
+            <ul class="rank-list" id="rank-list">
+                <li style="text-align:center;color:#555;font-size:0.8rem;padding:20px 0;">Cargando...</li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+<script>
+// Tabla de traducción: título en inglés (Frinkiac) → título en español latino
+const traduccion = {
+    "Simpsons Roasting on an Open Fire": "Especial de Navidad de los Simpson",
+    "Bart the Genius": "Bart es un genio",
+    "Homer's Odyssey": "La odisea de Homero",
+    "There's No Disgrace Like Home": "La familia va a terapia",
+    "Bart the General": "Bart el General",
+    "Moaning Lisa": "La depresión de Lisa",
+    "The Call of the Simpsons": "La llamada de los Simpson",
+    "The Telltale Head": "El héroe sin cabeza",
+    "Life on the Fast Lane": "Un momento de decisión",
+    "Homer's Night Out": "La noche de fiesta de Homero",
+    "The Crepes of Wrath": "Intercambio cultural",
+    "Krusty Gets Busted": "Krusty va a la cárcel",
+    "Some Enchanted Evening": "Una noche encantadora",
+    "Bart Gets an F": "Bart reprueba",
+    "Simpson and Delilah": "simpson y dalilah",
+    "Treehouse of Horror": "Especial de noche de brujas",
+    "Two Cars in Every Garage and Three Eyes on Every Fish": "Dos coches en cada garaje y tres ojos en cada pez",
+    "Dancin' Homer": "Homero el animador",
+    "Dead Putting Society": "la sociedad de los golfistas muertos",
+    "Bart vs. Thanksgiving": "Bart contra el día de gracias",
+    "Bart the Daredevil": "Bart el temerario",
+    "Itchy & Scratchy & Marge": "Tomy, Daly y Marge",
+    "Bart Gets Hit by a Car": "Bart es atropellado",
+    "One Fish, Two Fish, Blowfish, Blue Fish": "Aviso de muerte",
+    "The Way We Was": "Nuestros años felices",
+    "Homer vs. Patsy and Selma": "Homero contra patty y selma",
+    "Principal Charming": "El director encantador",
+    "Oh Brother, Where Art Thou?": "¿Dónde estás hermano mío?",
+    "Bart's Dog Gets an F": "El perro de bart reprueba",
+    "Old Money": "nuestros años felices",
+    "Brush with Greatness": "pinceles con grandeza",
+    "Lisa's Substitute": "El sustituto de Lisa",
+    "The War of the Simpsons": "La guerra de los Simpson",
+    "Three Men and a Comic Book": "Tres hombres y una historieta",
+    "Blood Feud": "Sangre nueva",
+    "Stark Raving Dad": "Papá está loco",
+    "Mr. Lisa Goes to Washington": "El patriotismo de Lisa",
+    "When Flanders Failed": "Cuando Flanders fracasó",
+    "Bart the Murderer": "Bart el asesino",
+    "Homer Defined": "homero al diccionario",
+    "Like Father, Like Clown": "De tal palo tal payaso",
+    "Treehouse of Horror II": "Especial de noche de brujas II",
+    "Lisa's Pony": "El pony de Lisa",
+    "Saturdays of Thunder": "Sábados de trueno",
+    "Flaming Moe's": "Llamarada Moe",
+    "Burns Verkaufen der Kraftwerk": "Burns y los alemanes",
+    "I Married Marge": "Me casé con Marge",
+    "Radio Bart": "bart y la radio",
+    "Lisa the Greek": "los pronosticos de lisa",
+    "Homer Alone": "Homero se queda solo",
+    "Bart the Lover": "Bart el amante",
+    "Homer at the Bat": "Homero al bat",
+    "Separate Vocations": "Vocaciones distintas",
+    "Dog of Death": "nuestro mejor amigo",
+    "Colonel Homer": "homero el campirano",
+    "Black Widower": "El viudo negro",
+    "The Otto Show": "El rock de Otto",
+    "Bart's Friend Falls in Love": "milhouse se enamora",
+    "Brother, Can You Spare Two Dimes?": "hermano, podrias darme dinero?",
+    "Kamp Krusty": "Kampamento Krusty",
+    "A Streetcar Named Marge": "Un tranvía llamado Marge",
+    "Homer the Heretic": "Homero el hereje",
+    "Lisa the Beauty Queen": "Lisa la reina de la belleza",
+    "Treehouse of Horror III": "Especial de noche de brujas III",
+    "Itchy & Scratchy: The Movie": "tomy y daly: La película",
+    "Marge Gets a Job": "Marge consigue un empleo",
+    "New Kid on the Block": "La chica nueva",
+    "Mr. Plow": "Don Barredora",
+    "Lisa's First Word": "La primera palabra de lisa",
+    "Homer's Triple Bypass": "El gran corazón de Homero",
+    "Marge vs. the Monorail": "Marge contra el monorriel",
+    "Selma's Choice": "La elección de Selma",
+    "Brother from the Same Planet": "Hermano menor, Hermano mayor",
+    "I Love Lisa": "Yo amo a Lisa",
+    "Duffless": "la promesa",
+    "Last Exit to Springfield": "La última salida a Springfield",
+    "So It's Come to This: A Simpsons Clip Show": "A esto hemos llegado",
+    "The Front": "el intermedio",
+    "Whacking Day": "El día del garrote",
+    "Marge in Chains": "Marge en cadenas",
+    "Krusty Gets Kancelled": "El drama de Krusty",
+    "Homer's Barbershop Quartet": "El cuarteto de Homero",
+    "Cape Feare": "Cabo de miedosos",
+    "Homer Goes to College": "Homero va a la universidad",
+    "Rosebud": "El oso de Burns",
+    "Treehouse of Horror IV": "Especial de noche de brujas IV",
+    "Marge on the Lam": "Marge la rebelde",
+    "Bart's Inner Child": "Filosofía bartiana",
+    "Boy-Scoutz 'n the Hood": "Exploradores a la fuerza",
+    "The Last Temptation of Homer": "La última tentación de Homero",
+    "$pringfield (Or, How I Learned to Stop Worrying and Love Legalized Gambling)": "Springfield próspero",
+    "Homer the Vigilante": "Homero el vigilante",
+    "Bart Gets Famous": "Bart se hace famoso",
+    "Homer and Apu": "homero y apu",
+    "Lisa vs. Malibu Stacy": "Lisa contra la Baby Malibú",
+    "Deep Space Homer": "Homero en el espacio profundo",
+    "Homer Loves Flanders": "Homero ama a Flanders",
+    "Bart Gets an Elephant": "Bart gana un elefante",
+    "Burns' Heir": "El heredero de Burns",
+    "Sweet Seymour Skinner's Baadasssss Song": "La canción de Skinner",
+    "The Boy Who Knew Too Much": "El niño que sabía demasiado",
+    "Lady Bouvier's Lover": "El amante de Lady Bouvier",
+    "Secrets of a Successful Marriage": "Secretos de un buen matrimonio",
+    "Bart of Darkness": "el diabolico bart",
+    "Lisa's Rival": "La rival de Lisa",
+    "Another Simpsons Clip Show": "recuerdos de amor",
+    "Itchy & Scratchy Land": "La tierra de Tomy y Daly",
+    "Sideshow Bob Roberts": "El regreso de Bob Patiño",
+    "Treehouse of Horror V": "Especial de noche de brujas V",
+    "Bart's Girlfriend": "La novia de Bart",
+    "Lisa on Ice": "Lisa y los deportes",
+    "Homer Badman": "Homero el malo",
+    "Grandpa vs. Sexual Inadequacy": "El abuelo contra la impotencia sexual",
+    "Fear of Flying": "Miedo a volar",
+    "Homer the Great": "Homero el Grande",
+    "And Maggie Makes Three": "y con maggie son tres",
+    "Bart's Comet": "El cometa de Bart",
+    "Homie the Clown": "Homero el payaso",
+    "Bart vs. Australia": "Bart contra Australia",
+    "Homer vs. Patty and Selma": "Homero contra Patty y Selma",
+    "A Star Is Burns": "Una estrella estrellada",
+    "Lisa's Wedding": "La boda de Lisa",
+    "Two Dozen and One Greyhounds": "Un galgo llamado Monty",
+    "The PTA Disbands": "lucha educativa",
+    "'Round Springfield": "por la cuidad de springfield",
+    "The Springfield Connection": "contacto en springfield",
+    "Lemon of Troy": "El limonero de Troya",
+    "Who Shot Mr. Burns? (Part One)": "¿Quién mató al Sr. Burns? (Parte 1)",
+    "Who Shot Mr. Burns? (Part Two)": "¿Quién mató al Sr. Burns? (Parte 2)",
+    "Radioactive Man": "hombre radiactivo",
+    "Home Sweet Homediddly-Dum-Doodily": "Hogar dulce hogarcirijillo",
+    "Bart Sells His Soul": "Bart vende su alma",
+    "Lisa the Vegetarian": "Lisa la vegetariana",
+    "Treehouse of Horror VI": "Especial de noche de brujas VI",
+    "King-Size Homer": "Homero tamaño familiar",
+    "Mother Simpson": "Mamá simpson",
+    "Sideshow Bob's Last Gleaming": "la ultima carcajada de Bob Patiño",
+    "The Simpsons 138th Episode Spectacular": "El espectacular episodio 138 de los Simpson",
+    "Marge Be Not Proud": "el bebé de mamá",
+    "Team Homer": "El equipo de Homero",
+    "Two Bad Neighbors": "Dos malos vecinos",
+    "Scenes from the Class Struggle in Springfield": "lucha de clases en Springfield",
+    "Bart the Fink": "Bart el soplón",
+    "Lisa the Iconoclast": "Lisa la iconoclasta",
+    "Homer the Smithers": "Homero el Smithers",
+    "The Day the Violence Died": "El día que murió la violencia",
+    "A Fish Called Selma": "Un pez llamado Selma",
+    "Bart on the Road": "Bart recorre el mundo",
+    "22 Short Films About Springfield": "22 películas cortas sobre Springfield",
+    "Raging Abe Simpson and His Grumbling Grandson in 'The Curse of the Flying Hellfish'": "Mi héroe el abuelo",
+    "Much Apu About Nothing": "y donde esta el inmigrante?",
+    "Homerpalooza": "Homeropalooza",
+    "Summer of 4 Ft. 2": "Verano de metro y medio",
+    "Treehouse of Horror VII": "Especial de noche de brujas VII",
+    "You Only Move Twice": "Solo se muda dos veces",
+    "The Homer They Fall": "Homero por el campeonato",
+    "Treehouse of Horror VIII": "Especial de noche de brujas VIII",
+    "Burns, Baby Burns": "Papi burns",
+    "Bart After Dark": "bart de noche",
+    "A Milhouse Divided": "Milhouse dividido",
+    "Lisa's Date with Density": "el soso romance de lisa",
+    "Hurricane Neddy": "Huracán Neddy",
+    "the mysterious voyage of homer": "El viaje misterioso de nuestro Homero",
+    "The Springfield Files": "los expedientes secretos de Springfield",
+    "The Twisted World of Marge Simpson": "el turbio y oscuro mundo de marge simpson",
+    "Mountain of Madness": "La montaña de la locura",
+    "Simpsoncalifragilisticexpialatrocious": "Simpsoncalifragilisticoexpialidoso",
+    "The Itchy & Scratchy & Poochie Show": "Tomy, Daly y Poochie",
+    "Homer's Phobia": "La fobia de Homero",
+    "Brother from Another Series": "El hermano de otra serie",
+    "My Sister, My Sitter": "mi hermana la niñera",
+    "Homer vs. the Eighteenth Amendment": "Homero contra la prohibición",
+    "Grade School Confidential": "Amor en la escuela",
+    "The Canine Mutiny": "Motín canino",
+    "The Old Man and the Lisa": "El viejo y Lisa",
+    "In Marge We Trust": "En Marge confiamos",
+    "Homer's Enemy": "El enemigo de Homero",
+    "The Simpsons Spin-Off Showcase": "El repertorio de refritos de los Simpson",
+    "The Secret War of Lisa Simpson": "La guerra secreta de Lisa Simpson",
+    "The City of New York vs. Homer Simpson": "La ciudad de Nueva York vs. Homer Simpson",
+    "The Principal and the Pauper": "El doble del director",
+    "Lisa's Sax": "El sax de Lisa",
+    "The Cartridge Family": "una familia peligrosa",
+    "Bart Star": "Bart se convierte en estrella",
+    "The Two Mrs. Nahasapeemapetilons": "Las dos señoras Nahasapeemapetilon",
+    "Lisa the Skeptic": "Lisa la escéptica",
+    "Realty Bites": "la cruda realidad",
+    "Miracle on Evergreen Terrace": "Milagro en la avenida siempreviva",
+    "All Singing, All Dancing": "Todos cantan, todos bailan",
+    "Bart Carny": "Bart en la feria",
+    "The Joy of Sect": "La secta de Springfield",
+    "Das Bus": "el autobus de la muerte",
+    "The Last Temptation of Krust": "La última tentacion de Krusty",
+    "Dumbbell Indemnity": "el bueno, la mala y el feo",
+    "Lisa the Simpson": "Lisa Simpson",
+    "This Little Wiggy": "gorgorito",
+    "Simpson Tide": "mi querido capitan simpson",
+    "The Trouble with Trillions": "mision deducible",
+    "Girly Edition": "lisa comentarista",
+    "Trash of the Titans": "basura de titanes",
+    "King of the Hill": "El rey de la colina",
+    "Lost Our Lisa": "hemos perdido a lisa",
+    "Natural Born Kissers": "marge, puedo dormir con el peligro?",
+    "Lard of the Dance": "la sazon del baile",
+    "The Wizard of Evergreen Terrace": "El mago de la avenida siempreviva",
+    "Bart the Mother": "Bart la madre",
+    "Treehouse of Horror IX": "Especial de noche de brujas IX",
+    "When You Dish Upon a Star": "cuando se anhela una estrella",
+    "D'oh-in' in the Wind": "D'oh en el viento",
+    "Lisa Gets an A": "Lisa consigue una A",
+    "Homer Simpson in: 'Kidney Trouble'": "Homero Simpson en: Problemas renales",
+    "Mayored to the Mob": "encuentro con la mafia",
+    "Viva Ned Flanders": "Viva Ned Flanders",
+    "Wild Barts Can't Be Broken": "a un bart salvaje nadie puede destrozarlo",
+    "Sunday, Cruddy Sunday": "domingo cruel domingo",
+    "Homer to the Max": "homero al maximo",
+    "I'm with Cupid": "me acompaña cupido",
+    "Marge Simpson in: 'Screaming Yellow Honkers'": "el submarino amarillo",
+    "Make Room for Lisa": "un espacio para lisa",
+    "Maximum Homerdrive": "homero trabaja demasiado",
+    "Simpsons Bible Stories": "Historias bíblicas de los Simpson",
+    "Mom and Pop Art": "el arte de mamá y papá",
+    "The Old Man and the 'C' Student": "el abuelo y el estudiante de bajas calificaciones",
+    "Monty Can't Buy Me Love": "monty no puede comprar mi amor",
+    "They Saved Lisa's Brain": "salvaron el cerebro de lisa",
+    "Thirty Minutes Over Tokyo": "Treinta minutos sobre Tokio",
+    "Beyond Blunderdome": "homero va a hollywood",
+    "Brother's Little Helper": "el cambio de bart",
+    "Guess Who's Coming to Criticize Dinner?": "adivina quien viene a criticar",
+    "Treehouse of Horror X": "Especial de noche de brujas X",
+    "E-I-E-I-(Annoyed Grunt)": "homero el granjero",
+    "Hello Gutter, Hello Fadder": "hola mamá, hola papá",
+    "Eight Misbehavin'": "octillizos",
+    "Take My Wife, Sleaze": "llevate a mi esposa",
+    "Grift of the Magi": "el gran embaucador",
+    "Little Big Mom": "La pequeña mamá",
+    "Faith Off": "perdida de fe",
+    "The Mansion Family": "La familia mansión",
+    "Saddlesore Galactica": "jinetes galacticos",
+    "Alone Again, Natura-Diddily": "solo nuevamentirijillo",
+    "Missionary: Impossible": "Misionero Imposible",
+    "Pygmoelian": "Pigmoelion",
+    "Bart to the Future": "Bart al futuro",
+    "Days of Wine and D'oh'ses": "dias de vino y rosas",
+    "Kill the Alligator and Run": "mata al cocodrilo y huye",
+    "Last Tap Dance in Springfield": "el ultimo tango en springfield",
+    "It's a Mad, Mad, Mad, Mad Marge": "marge esta loca, loca, loca",
+    "Behind the Laughter": "Detrás de las risas",
+    // === TEMPORADA 9 ===
+    "The City of New York vs. Homer Simpson": "La ciudad de Nueva York vs. Homero Simpson",
+    "The Principal and the Pauper": "El doble del director",
+    "Lisa's Sax": "El sax de Lisa",
+    "Treehouse of Horror VIII": "Especial de noche de brujas VIII",
+    "The Cartridge Family": "Una familia peligrosa",
+    "Bart Star": "Bart se convierte en estrella",
+    "The Two Mrs. Nahasapeemapetilons": "Las dos señoras Nahasapeemapetilon",
+    "Lisa the Skeptic": "Lisa la escéptica",
+    "Realty Bites": "La cruda realidad",
+    "Miracle on Evergreen Terrace": "Milagro en la avenida siempreviva",
+    "All Singing, All Dancing": "Todos cantan, todos bailan",
+    "Bart Carny": "Bart en la feria",
+    "The Joy of Sect": "La secta de Springfield",
+    "Das Bus": "El autobús de la muerte",
+    "The Last Temptation of Krust": "La última tentación de Krusty",
+    "Dumbbell Indemnity": "El bueno, la mala y el feo",
+    "Lisa the Simpson": "Lisa Simpson",
+    "This Little Wiggy": "Gorgorito",
+    "Simpson Tide": "Mi querido capitán Simpson",
+    "The Trouble with Trillions": "Misión deducible",
+    "Girly Edition": "Lisa comentarista",
+    "Trash of the Titans": "Basura de titanes",
+    "King of the Hill": "El rey de la colina",
+    "Lost Our Lisa": "Hemos perdido a Lisa",
+    "Natural Born Kissers": "Marge, ¿puedo dormir con el peligro?",
+    // === TEMPORADA 10 ===
+    "Lard of the Dance": "La sazón del baile",
+    "The Wizard of Evergreen Terrace": "El mago de la avenida siempreviva",
+    "Bart the Mother": "Bart la madre",
+    "Treehouse of Horror IX": "Especial de noche de brujas IX",
+    "When You Dish Upon a Star": "Cuando se anhela una estrella",
+    "D'oh-in' in the Wind": "D'oh en el viento",
+    "Lisa Gets an A": "Lisa consigue una A",
+    "Homer Simpson in: 'Kidney Trouble'": "Homero Simpson en: Problemas renales",
+    "Mayored to the Mob": "Encuentro con la mafia",
+    "Viva Ned Flanders": "Viva Ned Flanders",
+    "Wild Barts Can't Be Broken": "A un Bart salvaje nadie puede destrozarlo",
+    "Sunday, Cruddy Sunday": "Domingo cruel domingo",
+    "Homer to the Max": "Homero al máximo",
+    "I'm with Cupid": "Me acompaña Cupido",
+    "Marge Simpson in: 'Screaming Yellow Honkers'": "El submarino amarillo",
+    "Make Room for Lisa": "Un espacio para Lisa",
+    "Maximum Homerdrive": "Homero trabaja demasiado",
+    "Simpsons Bible Stories": "Historias bíblicas de los Simpson",
+    "Mom and Pop Art": "El arte de mamá y papá",
+    "The Old Man and the 'C' Student": "El abuelo y el estudiante de bajas calificaciones",
+    "Monty Can't Buy Me Love": "Monty no puede comprar mi amor",
+    "They Saved Lisa's Brain": "Salvaron el cerebro de Lisa",
+    "Thirty Minutes Over Tokyo": "Treinta minutos sobre Tokio",
+    // === TEMPORADA 11 ===
+    "Beyond Blunderdome": "Homero va a Hollywood",
+    "Brother's Little Helper": "El cambio de Bart",
+    "Guess Who's Coming to Criticize Dinner?": "Adivina quién viene a criticar",
+    "Treehouse of Horror X": "Especial de noche de brujas X",
+    "E-I-E-I-(Annoyed Grunt)": "Homero el granjero",
+    "Hello Gutter, Hello Fadder": "Hola mamá, hola papá",
+    "Eight Misbehavin'": "Octillizos",
+    "Take My Wife, Sleaze": "Llévate a mi esposa",
+    "Grift of the Magi": "El gran embaucador",
+    "Little Big Mom": "La pequeña mamá",
+    "Faith Off": "Pérdida de fe",
+    "The Mansion Family": "La familia mansión",
+    "Saddlesore Galactica": "Jinetes galácticos",
+    "Alone Again, Natura-Diddily": "Solo nuevamentirijillo",
+    "Missionary: Impossible": "Misionero Imposible",
+    "Pygmoelian": "Pigmoelion",
+    "Bart to the Future": "Bart al futuro",
+    "Days of Wine and D'oh'ses": "Días de vino y rosas",
+    "Kill the Alligator and Run": "Mata al cocodrilo y huye",
+    "Last Tap Dance in Springfield": "El último tango en Springfield",
+    "It's a Mad, Mad, Mad, Mad Marge": "Marge está loca, loca, loca",
+    "Behind the Laughter": "Detrás de las risas",
+    // === TEMPORADA 12 ===
+    "Treehouse of Horror XI": "Especial de noche de brujas XI",
+    "A Tale of Two Springfields": "El nuevo Springfield",
+    "Insane Clown Poppy": "Krusty el papá",
+    "Lisa the Tree Hugger": "Lisa la ecologista",
+    "Homer vs. Dignity": "Homero sin dignidad",
+    "The Computer Wore Menace Shoes": "Homero y su computadora",
+    "The Great Money Caper": "El gran robo de los Simpson",
+    "Skinner's Sense of Snow": "Skinner en la nieve",
+    "HOMR": "El verdadero Homero",
+    "Pokey Mom": "Mamá en prisión",
+    "Worst Episode Ever": "El peor episodio de siempre",
+    "Tennis the Menace": "Tenis peligroso",
+    "Day of the Jackanapes": "El día del bobalicón",
+    "New Kids on the Blecch": "Los nuevos chicos del barrio",
+    "Hungry, Hungry Homer": "Homero en huelga de hambre",
+    "Bye Bye Nerdie": "Adiós nerdio",
+    "Simpson Safari": "Safari Simpson",
+    "Trilogy of Error": "Trilogía de errores",
+    "I'm Goin' to Praiseland": "Voy a la tierra de alabanza",
+    "Children of a Lesser Clod": "Homero y los niños",
+    "Simpsons Tall Tales": "Cuentos altos de los Simpson",
+    // === TEMPORADA 13 ===
+    "Treehouse of Horror XII": "Especial de noche de brujas XII",
+    "The Parent Rap": "El rap de los padres",
+    "Homer the Moe": "Homero el Moe",
+    "A Hunka Hunka Burns in Love": "Burns enamorado",
+    "The Blunder Years": "Los años del error",
+    "She of Little Faith": "Lisa y la fe",
+    "Brawl in the Family": "Pelea en familia",
+    "Sweets and Sour Marge": "Dulce y amarga Marge",
+    "Jaws Wired Shut": "Con la boca cerrada",
+    "Half-Decent Proposal": "Una propuesta no tan decente",
+    "The Bart Wants What It Wants": "Bart quiere lo que quiere",
+    "The Lastest Gun in the West": "El último pistolero del oeste",
+    "The Old Man and the Key": "El abuelo y la llave",
+    "Tales from the Public Domain": "Cuentos del dominio público",
+    "Blame It on Lisa": "La culpa es de Lisa",
+    "Weekend at Burnsie's": "Un fin de semana con Burns",
+    "Gump Roast": "Homero Forrest Gump",
+    "I Am Furious (Yellow)": "Estoy furioso (amarillo)",
+    "The Sweetest Apu": "El dulce Apu",
+    "Little Girl in the Big Ten": "La pequeña Lisa en la universidad",
+    "The Frying Game": "El juego de freír",
+    "Poppa's Got a Brand New Badge": "Papá tiene una nueva placa",
+    // === TEMPORADA 14 ===
+    "Treehouse of Horror XIII": "Especial de noche de brujas XIII",
+    "How I Spent My Strummer Vacation": "Cómo pasé mis vacaciones de rock",
+    "Bart vs. Lisa vs. the Third Grade": "Bart vs. Lisa vs. tercer grado",
+    "Large Marge": "La gran Marge",
+    "Helter Shelter": "Helter Shelter",
+    "The Great Louse Detective": "El gran detective piojo",
+    "Special Edna": "La especial Edna",
+    "The Dad Who Knew Too Little": "El papá que sabía muy poco",
+    "The Strong Arms of the Ma": "Los fuertes brazos de mamá",
+    "Pray Anything": "Reza cualquier cosa",
+    "Barting Over": "Bart se independiza",
+    "I'm Spelling as Fast as I Can": "Deletreo veloz",
+    "A Star Is Born Again": "Una estrella nace de nuevo",
+    "Mr. Spritz Goes to Washington": "El señor Spritz va a Washington",
+    "C.E. D'oh": "Director ejecutivo Homero",
+    "'Scuse Me While I Miss the Sky": "Perdona que falle el cielo",
+    "Three Gays of the Condo": "Tres gay en el condominio",
+    "Dude, Where's My Ranch?": "Amigo, ¿dónde está mi rancho?",
+    "Old Yeller-Belly": "El cobarde amarillo",
+    "Brake My Wife, Please": "Para a mi esposa, por favor",
+    "The Bart of War": "El Bart de la guerra",
+    "Moe Baby Blues": "El blues del bebé de Moe",
+    // === TEMPORADA 15 ===
+    "Treehouse of Horror XIV": "Especial de noche de brujas XIV",
+    "My Mother the Carjacker": "Mi madre la ladrona de autos",
+    "The President Wore Pearls": "La presidenta con perlas",
+    "The Regina Monologues": "Los monólogos de Regina",
+    "The Fat and the Furriest": "El gordo y el peludo",
+    "Today, I Am a Clown": "Hoy soy un payaso",
+    "Tis the Fifteenth Season": "Es la decimoquinta temporada",
+    "Marge vs. Singles, Seniors, Childless Couples and Teens, and Gays": "Marge vs. todos",
+    "'Tis the Fifteenth Season": "Es la decimoquinta temporada",
+    "I, D'oh-Bot": "Yo, Homero robot",
+    "Diatribe of a Mad Housewife": "La diatriba de una ama de casa",
+    "Margical History Tour": "El tour histórico de Marge",
+    "Milhouse Doesn't Live Here Anymore": "Milhouse ya no vive aquí",
+    "Smart and Smarter": "Listo y más listo",
+    "The Ziff Who Came to Dinner": "El Ziff que vino a cenar",
+    "Co-Dependent's Day": "El día del codependiente",
+    "The Wandering Juvie": "El joven errante",
+    "My Big Fat Geek Wedding": "Mi gran boda geek",
+    "Catch 'Em If You Can": "Atrápame si puedes",
+    "Simple Simpson": "Simpson sencillo",
+    "The Way We Weren't": "Como no éramos",
+    "Bart-Mangled Banner": "La bandera destrozada de Bart",
+    "Fraudcast News": "Noticias fraudulentas",
+};
+
+// Tabla código → título español como fallback
+const diccionario = {
+    // === TEMPORADAS 1-8 (originales) ===
+    "S01E01":"Especial de Navidad de los Simpson","S01E02":"Bart es un genio","S01E03":"La odisea de Homero","S01E04":"La familia va a terapia","S01E05":"Bart el General","S01E06":"La depresión de Lisa","S01E07":"La llamada de los Simpson","S01E08":"El héroe sin cabeza","S01E09":"Un momento de decisión","S01E10":"La noche de fiesta de Homero","S01E11":"Intercambio cultural","S01E12":"Krusty va a la cárcel","S01E13":"Una noche encantadora",
+    "S02E01":"Bart reprueba","S02E02":"simpson y dalilah","S02E03":"Especial de noche de brujas","S02E04":"Dos coches en cada garaje y tres ojos en cada pez","S02E05":"Homero el animador","S02E06":"la sociedad de los golfistas muertos","S02E07":"Bart en el día de gracias","S02E08":"Bart el temerario","S02E09":"Tomy, Daly y Marge","S02E10":"Bart es atropellado","S02E11":"Aviso de muerte","S02E12":"Nuestros años felices","S02E13":"Homero contra el octavo mandamiento","S02E14":"El director encantador","S02E15":"¿Dónde estás hermano mío?","S02E16":"El perro de bart reprueba","S02E17":"nuestros años felices","S02E18":"Pinceles de grandeza","S02E19":"El sustituto de Lisa","S02E20":"La guerra de los Simpson","S02E21":"Tres hombres y una historieta","S02E22":"Sangre nueva",
+    "S03E01":"Papá está loco","S03E02":"El patriotismo de Lisa","S03E03":"Cuando Flanders fracasó","S03E04":"Bart el asesino","S03E05":"homero al diccionario","S03E06":"De tal palo tal payaso","S03E07":"Especial de noche de brujas II","S03E08":"El pony de Lisa","S03E09":"Sábados de trueno","S03E10":"Llamarada Moe","S03E11":"Burns y los alemanes","S03E12":"Me casé con Marge","S03E13":"bart y la radio","S03E14":"los pronosticos de lisa","S03E15":"Homero se queda solo","S03E16":"Bart el amante","S03E17":"Homero al bat","S03E18":"Vocaciones distintas","S03E19":"nuestro mejor amigo","S03E20":"Homero el campirano","S03E21":"El viudo negro","S03E22":"El rock de Otto","S03E23":"milhouse se enamora",
+    "S04E01":"Kampamento Krusty","S04E02":"Un tranvía llamado Marge","S04E03":"Homero el hereje","S04E04":"Lisa la reina de la belleza","S04E05":"Especial de noche de brujas III","S04E06":"tomy y daly: La película","S04E07":"Marge consigue un empleo","S04E08":"La chica nueva","S04E09":"Don Barredora","S04E10":"La primera palabra de lisa","S04E11":"El gran corazón de Homero","S04E12":"Marge contra el monorriel","S04E13":"La elección de Selma","S04E14":"Hermano menor, hermano mayor","S04E15":"Yo amo a Lisa","S04E16":"la promesa","S04E17":"La última salida a Springfield","S04E18":"A esto hemos llegado","S04E19":"El intermedio","S04E20":"El día del garrote","S04E21":"Marge en cadenas","S04E22":"El drama de Krusty",
+    "S05E01":"El cuarteto de Homero","S05E02":"Cabo de miedosos","S05E03":"Homero va a la universidad","S05E04":"El oso de Burns","S05E05":"Especial de noche de brujas IV","S05E06":"Marge la rebelde","S05E07":"Filosofía bartiana","S05E08":"Exploradores a la fuerza","S05E09":"La última tentación de Homero","S05E10":"Springfield próspero","S05E11":"Homero el vigilante","S05E12":"Bart se hace famoso","S05E13":"Homero y apu","S05E14":"Lisa contra la Baby Malibú","S05E15":"Homero en el espacio profundo","S05E16":"homero ama a flanders","S05E17":"bart gana un elefante","S05E18":"el heredero de burns","S05E19":"la cancion de skinner","S05E20":"El niño que sabia demasiado","S05E21":"el amante de lady bouvier",
+    "S06E01":"el diabolico bart","S06E02":"La rival de Lisa","S06E03":"recuerdos de amor","S06E04":"La tierra de Tomy y Daly","S06E05":"El regreso de Bob Patiño","S06E06":"Especial de noche de brujas V","S06E07":"La novia de Bart","S06E08":"Lisa y los deportes","S06E09":"Homero el malo","S06E10":"El abuelo contra la impotencia sexual","S06E11":"Miedo a volar","S06E12":"Homero el Grande","S06E13":"y con maggie son tres","S06E14":"El cometa de Bart","S06E15":"Homero el payaso","S06E16":"Bart contra Australia","S06E17":"Homero contra Patty y Selma","S06E18":"Una estrella estrellada","S06E19":"La boda de Lisa","S06E20":"Un galgo llamado Monty","S06E21":"lucha educativa","S06E22":"por la cuidad de springfield","S06E23":"contacto en springfield","S06E24":"el limonero de troya","S06E25":"quien mato al señor burns parte uno",
+    "S07E01":"Quién mató al Sr. Burns parte dos","S07E02":"hombre radioactivo","S07E03":"Hogar dulce hogarcirijillo","S07E04":"Bart vende su alma","S07E05":"Lisa la vegetariana","S07E06":"Especial de noche de brujas VI","S07E07":"Homero tamaño familiar","S07E08":"Mamá simpson","S07E09":"la ultima carcajada de Bob Patiño","S07E10":"El espectacular episodio 138 de los Simpson","S07E11":"El bebé de mamá","S07E12":"El equipo de Homero","S07E13":"malos vecinos","S07E14":"lucha de clases en Springfield","S07E15":"Bart el soplón","S07E16":"Lisa la iconoclasta","S07E17":"Homero el Smithers","S07E18":"El día que murió la violencia","S07E19":"Un pez llamado Selma","S07E20":"Bart recorre el mundo","S07E21":"22 peliculas cortas sobre springfield","S07E22":"Mi héroe el abuelo","S07E23":"y donde esta el inmigrante?","S07E24":"Homeropalooza","S07E25":"Verano de metro y medio",
+    "S08E01":"Especial de noche de brujas VII","S08E02":"Solo se muda dos veces","S08E03":"Homero por el campeonato","S08E04":"papi burns","S08E05":"bart de noche","S08E06":"Milhouse dividido","S08E07":"el soso romance de lisa","S08E08":"Huracán Neddy","S08E09":"el viaje misterioso de nuestro homero","S08E10":"los expedientes secretos de springfield","S08E11":"el turbio y oscuro mundo de marge simpson","S08E12":"La montaña de la locura","S08E13":"simpsoncalifrajilisticoespialidoso","S08E14":"tomy y daly y poochie","S08E15":"La fobia de Homero","S08E16":"el hermano de otra serie","S08E17":"mi hermana la niñera","S08E18":"homero contra la prohibicion","S08E19":"amor en la escuela","S08E20":"motin canino","S08E21":"el viejo y la lisa","S08E22":"preguntale a marge","S08E23":"El enemigo de Homero","S08E24":"reperterio de refritos","S08E25":"La guerra secreta de Lisa Simpson",
+    // === TEMPORADA 9 ===
+    "S09E01":"La ciudad de Nueva York vs. Homero Simpson","S09E02":"El doble del director","S09E03":"El sax de Lisa","S09E04":"Especial de noche de brujas VIII","S09E05":"Una familia peligrosa","S09E06":"Bart se convierte en estrella","S09E07":"Las dos señoras Nahasapeemapetilon","S09E08":"Lisa la escéptica","S09E09":"La cruda realidad","S09E10":"Milagro en la avenida siempreviva","S09E11":"Todos cantan, todos bailan","S09E12":"Bart en la feria","S09E13":"La secta de Springfield","S09E14":"El autobús de la muerte","S09E15":"La última tentación de Krusty","S09E16":"El bueno, la mala y el feo","S09E17":"Lisa Simpson","S09E18":"Gorgorito","S09E19":"Mi querido capitán Simpson","S09E20":"Misión deducible","S09E21":"Lisa comentarista","S09E22":"Basura de titanes","S09E23":"El rey de la colina","S09E24":"Hemos perdido a Lisa","S09E25":"Marge, ¿puedo dormir con el peligro?",
+    // === TEMPORADA 10 ===
+    "S10E01":"La sazón del baile","S10E02":"El mago de la avenida siempreviva","S10E03":"Bart la madre","S10E04":"Especial de noche de brujas IX","S10E05":"Cuando se anhela una estrella","S10E06":"D'oh en el viento","S10E07":"Lisa consigue una A","S10E08":"Homero Simpson en: Problemas renales","S10E09":"Encuentro con la mafia","S10E10":"Viva Ned Flanders","S10E11":"A un Bart salvaje nadie puede destrozarlo","S10E12":"Domingo cruel domingo","S10E13":"Homero al máximo","S10E14":"Me acompaña Cupido","S10E15":"El submarino amarillo","S10E16":"Un espacio para Lisa","S10E17":"Homero trabaja demasiado","S10E18":"Historias bíblicas de los Simpson","S10E19":"El arte de mamá y papá","S10E20":"El abuelo y el estudiante de bajas calificaciones","S10E21":"Monty no puede comprar mi amor","S10E22":"Salvaron el cerebro de Lisa","S10E23":"Treinta minutos sobre Tokio",
+    // === TEMPORADA 11 ===
+    "S11E01":"Homero va a Hollywood","S11E02":"El cambio de Bart","S11E03":"Adivina quién viene a criticar","S11E04":"Especial de noche de brujas X","S11E05":"Homero el granjero","S11E06":"Hola mamá, hola papá","S11E07":"Octillizos","S11E08":"Llévate a mi esposa","S11E09":"El gran embaucador","S11E10":"La pequeña mamá","S11E11":"Pérdida de fe","S11E12":"La familia mansión","S11E13":"Jinetes galácticos","S11E14":"Solo nuevamentirijillo","S11E15":"Misionero Imposible","S11E16":"Pigmoelion","S11E17":"Bart al futuro","S11E18":"Días de vino y rosas","S11E19":"Mata al cocodrilo y huye","S11E20":"El último tango en Springfield","S11E21":"Marge está loca, loca, loca","S11E22":"Detrás de las risas",
+    // === TEMPORADA 12 ===
+    "S12E01":"Especial de noche de brujas XI","S12E02":"El nuevo Springfield","S12E03":"Krusty el papá","S12E04":"Lisa la ecologista","S12E05":"Homero sin dignidad","S12E06":"Homero y su computadora","S12E07":"El gran robo de los Simpson","S12E08":"Skinner en la nieve","S12E09":"El verdadero Homero","S12E10":"Mamá en prisión","S12E11":"El peor episodio de siempre","S12E12":"Tenis peligroso","S12E13":"El día del bobalicón","S12E14":"Los nuevos chicos del barrio","S12E15":"Homero en huelga de hambre","S12E16":"Adiós nerdio","S12E17":"Safari Simpson","S12E18":"Trilogía de errores","S12E19":"Voy a la tierra de alabanza","S12E20":"Homero y los niños","S12E21":"Cuentos altos de los Simpson",
+    // === TEMPORADA 13 ===
+    "S13E01":"Especial de noche de brujas XII","S13E02":"El rap de los padres","S13E03":"Homero el Moe","S13E04":"Burns enamorado","S13E05":"Los años del error","S13E06":"Lisa y la fe","S13E07":"Pelea en familia","S13E08":"Dulce y amarga Marge","S13E09":"Con la boca cerrada","S13E10":"Una propuesta no tan decente","S13E11":"Bart quiere lo que quiere","S13E12":"El último pistolero del oeste","S13E13":"El abuelo y la llave","S13E14":"Cuentos del dominio público","S13E15":"La culpa es de Lisa","S13E16":"Un fin de semana con Burns","S13E17":"Homero Forrest Gump","S13E18":"Estoy furioso (amarillo)","S13E19":"El dulce Apu","S13E20":"La pequeña Lisa en la universidad","S13E21":"El juego de freír","S13E22":"Papá tiene una nueva placa",
+    // === TEMPORADA 14 ===
+    "S14E01":"Especial de noche de brujas XIII","S14E02":"Cómo pasé mis vacaciones de rock","S14E03":"Bart vs. Lisa vs. tercer grado","S14E04":"La gran Marge","S14E05":"Helter Shelter","S14E06":"El gran detective piojo","S14E07":"La especial Edna","S14E08":"El papá que sabía muy poco","S14E09":"Los fuertes brazos de mamá","S14E10":"Reza cualquier cosa","S14E11":"Bart se independiza","S14E12":"Deletreo veloz","S14E13":"Una estrella nace de nuevo","S14E14":"El señor Spritz va a Washington","S14E15":"Director ejecutivo Homero","S14E16":"Perdona que falle el cielo","S14E17":"Tres gay en el condominio","S14E18":"Amigo, ¿dónde está mi rancho?","S14E19":"El cobarde amarillo","S14E20":"Para a mi esposa, por favor","S14E21":"El Bart de la guerra","S14E22":"El blues del bebé de Moe",
+    // === TEMPORADA 15 ===
+    "S15E01":"Especial de noche de brujas XIV","S15E02":"Mi madre la ladrona de autos","S15E03":"La presidenta con perlas","S15E04":"Los monólogos de Regina","S15E05":"El gordo y el peludo","S15E06":"Hoy soy un payaso","S15E07":"Es la decimoquinta temporada","S15E08":"Marge vs. todos","S15E09":"Yo, Homero robot","S15E10":"La diatriba de una ama de casa","S15E11":"El tour histórico de Marge","S15E12":"Milhouse ya no vive aquí","S15E13":"Listo y más listo","S15E14":"El Ziff que vino a cenar","S15E15":"El día del codependiente","S15E16":"El joven errante","S15E17":"Mi gran boda geek","S15E18":"Atrápame si puedes","S15E19":"Simpson sencillo","S15E20":"Como no éramos","S15E21":"La bandera destrozada de Bart","S15E22":"Noticias fraudulentas",
+};
+
+const todosTitulos = [...new Set(Object.values(diccionario))];
+let score=0, lives=5, respuestaCorrecta="", juegoActivo=false, indiceActivo=-1;
+let nombreJugador = "";
+
+// ─── NOMBRE DE JUGADOR ───────────────────────────────────────
+function confirmarNombre() {
+    const inp = document.getElementById('name-screen-input');
+    const nombre = inp.value.trim();
+    if (!nombre) { inp.style.borderColor='var(--red)'; inp.focus(); return; }
+    nombreJugador = nombre;
+    document.getElementById('name-screen').style.display = 'none';
+    actualizarPlayerTag();
+    juegoActivo = true;
+    nuevaPregunta();
+    cargarRanking();
+}
+
+function actualizarPlayerTag() {
+    const tag = document.getElementById('player-tag');
+    tag.innerHTML = `Jugando como: <span style="color:var(--yellow);font-weight:900;">${nombreJugador}</span>
+        <button onclick="cambiarNombre()" style="background:none;border:none;color:#555;font-size:0.7rem;cursor:pointer;text-decoration:underline;margin-left:4px;">cambiar</button>`;
+}
+
+function cambiarNombre() {
+    const nuevo = prompt("¿Nuevo nombre?", nombreJugador);
+    if (nuevo && nuevo.trim()) {
+        nombreJugador = nuevo.trim().substring(0,18);
+        actualizarPlayerTag();
+        document.getElementById('nombre-input').value = nombreJugador;
+    }
+}
+
+// ─── RANKING / LEADERBOARD ───────────────────────────────────
+const STORAGE_KEY = 'springfield-leaderboard';
+const MAX_ENTRIES = 10;
+
+async function cargarRanking() {
+    const lista = document.getElementById('rank-list');
+    lista.innerHTML = '<li style="text-align:center;color:#666;font-size:0.75rem;padding:10px 0;animation:blink 1s step-start infinite;">Cargando...</li>';
+    try {
+        const res = await window.storage.get(STORAGE_KEY, true);
+        const entries = res ? JSON.parse(res.value) : [];
+        renderRanking(entries);
+    } catch(e) {
+        renderRanking([]);
+    }
+}
+
+function renderRanking(entries) {
+    const lista = document.getElementById('rank-list');
+    if (!entries.length) {
+        lista.innerHTML = '<li style="text-align:center;color:#555;font-size:0.8rem;padding:20px 0;">¡Sé el primero!</li>';
+        return;
+    }
+    const medals = ['gold','silver','bronze'];
+    const posColors = ['#FFD700','#C0C0C0','#CD7F32'];
+    lista.innerHTML = entries.map((e,i) => {
+        const posStyle = i < 3 ? `color:${posColors[i]};` : 'color:#888;';
+        const posIcon = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i+1}.`;
+        return `<li style="display:flex;align-items:center;gap:8px;padding:7px 4px;border-bottom:1px solid rgba(255,255,255,0.06);font-size:0.82rem;font-weight:700;">
+            <span style="font-family:'Bangers',cursive;font-size:1rem;width:26px;text-align:center;flex-shrink:0;${posStyle}">${posIcon}</span>
+            <span style="flex:1;color:#eee;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(e.name)}</span>
+            <span style="font-family:'Bangers',cursive;font-size:1rem;color:var(--yellow);flex-shrink:0;">${e.score}</span>
+        </li>`;
+    }).join('');
+}
+
+function escapeHtml(str) {
+    return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+async function guardarPuntaje(nombre, pts) {
+    if (!pts || pts <= 0) return;
+    try {
+        let entries = [];
+        try {
+            const res = await window.storage.get(STORAGE_KEY, true);
+            if (res) entries = JSON.parse(res.value);
+        } catch(e) { entries = []; }
+
+        entries.push({ name: nombre, score: pts, date: Date.now() });
+        // Ordenar por puntaje desc, quedarse con top MAX_ENTRIES
+        entries.sort((a,b) => b.score - a.score);
+        entries = entries.slice(0, MAX_ENTRIES);
+
+        await window.storage.set(STORAGE_KEY, JSON.stringify(entries), true);
+        renderRanking(entries);
+    } catch(e) {
+        console.error('Error guardando puntaje:', e);
+    }
+}
+
+// ─── LÓGICA DEL JUEGO ────────────────────────────────────────
+function traducir(titulo_en, codigo) {
+    if (titulo_en && traduccion[titulo_en]) return traduccion[titulo_en];
+    if (codigo && diccionario[codigo]) return diccionario[codigo];
+    return titulo_en || codigo;
+}
+
+function normalizar(str) {
+    return str.toLowerCase().normalize('NFD')
+        .replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9\s]/g,'').replace(/\s+/g,' ').trim();
+}
+
+function resaltar(titulo, query) {
+    const palabras = normalizar(query).split(' ').filter(Boolean);
+    let res = titulo;
+    palabras.forEach(p => { res = res.replace(new RegExp(`(${p})`, 'gi'), '<mark>$1</mark>'); });
+    return res;
+}
+
+function mostrarSugerencias() {
+    const query = document.getElementById('titulo-input').value.trim();
+    const cont = document.getElementById('sugerencias');
+    indiceActivo = -1;
+    if (query.length < 2) { cont.style.display='none'; return; }
+    const palabras = normalizar(query).split(' ').filter(Boolean);
+    const resultados = todosTitulos.filter(t => palabras.every(p => normalizar(t).includes(p))).slice(0,6);
+    if (!resultados.length) { cont.style.display='none'; return; }
+    cont.innerHTML = resultados.map(t =>
+        `<div class="sug-item" onclick="seleccionar('${t.replace(/'/g,"\\'")}')">${resaltar(t,query)}</div>`
+    ).join('');
+    cont.style.display='block';
+}
+
+function seleccionar(titulo) {
+    document.getElementById('titulo-input').value = titulo;
+    document.getElementById('sugerencias').style.display='none';
+    enviar();
+}
+
+function manejarTeclado(e) {
+    const cont = document.getElementById('sugerencias');
+    const items = cont.querySelectorAll('.sug-item');
+    if (e.key==='ArrowDown') { e.preventDefault(); indiceActivo=Math.min(indiceActivo+1,items.length-1); }
+    else if (e.key==='ArrowUp') { e.preventDefault(); indiceActivo=Math.max(indiceActivo-1,-1); }
+    else if (e.key==='Enter') { if (indiceActivo>=0 && items[indiceActivo]) { items[indiceActivo].click(); return; } enviar(); return; }
+    else if (e.key==='Escape') { cont.style.display='none'; return; }
+    items.forEach((item,i) => item.classList.toggle('activo', i===indiceActivo));
+}
+
+async function nuevaPregunta() {
+    if (!juegoActivo) return;
+    const loader=document.getElementById('loader'), img=document.getElementById('episode-img');
+    const input=document.getElementById('titulo-input'), btn=document.getElementById('btn-enviar');
+
+    loader.innerText="SINTONIZANDO..."; loader.style.display="block";
+    loader.style.animation="blink 0.8s step-start infinite"; loader.style.color="var(--yellow)";
+    img.style.display="none"; input.value=""; input.disabled=true; input.className="";
+    btn.disabled=true; document.getElementById('sugerencias').style.display='none';
+    document.getElementById('feedback').innerText="";
+
+    const codigos = Object.keys(diccionario);
+    const codigo = codigos[Math.floor(Math.random()*codigos.length)];
+
+    try {
+        const res = await fetch(`/api/frinkiac?episode=${codigo}`);
+        if (!res.ok) throw new Error();
+        const data = await res.json();
+        respuestaCorrecta = traducir(data.titulo_en, data.Frame.Episode);
+        const imgUrl = `/api/imagen?episode=${data.Frame.Episode}&timestamp=${data.Frame.Timestamp}`;
+        img.onload = () => {
+            loader.style.display="none"; img.style.display="block";
+            input.disabled=false; btn.disabled=false; input.focus();
+        };
+        img.onerror = () => {
+            loader.innerText="❌ ERROR DE SEÑAL"; loader.style.animation="none"; loader.style.color="var(--red)";
+        };
+        img.src = imgUrl;
+    } catch(e) {
+        loader.innerText="❌ ERROR DE SEÑAL"; loader.style.animation="none"; loader.style.color="var(--red)";
+    }
+}
+
+function enviar() {
+    const input=document.getElementById('titulo-input'), f=document.getElementById('feedback');
+    const tuRespuesta=input.value.trim();
+    if (!tuRespuesta) return;
+    document.getElementById('sugerencias').style.display='none';
+    input.disabled=true; document.getElementById('btn-enviar').disabled=true;
+
+    if (normalizar(tuRespuesta)===normalizar(respuestaCorrecta)) {
+        input.classList.add('correcto'); score+=10;
+        document.getElementById('score').innerText=score;
+        f.innerText="¡PERFECTIRIJILLO! ✨"; f.style.color="var(--yellow)";
+        setTimeout(nuevaPregunta,1800);
+    } else {
+        input.classList.add('incorrecto'); lives--;
+        actualizarVidas();
+        f.innerHTML=`¡D'OH! Era:<br><small style="font-size:0.9rem">${respuestaCorrecta}</small>`;
+        f.style.color="var(--red)";
+        if (lives<=0) setTimeout(finalizarJuego,1800);
+        else setTimeout(nuevaPregunta,2800);
+    }
+}
+
+function actualizarVidas() { document.getElementById('lives').innerText="🍩".repeat(Math.max(0,lives)); }
+
+function finalizarJuego() {
+    juegoActivo=false;
+    document.getElementById('nombre-input').value = nombreJugador;
+    document.getElementById('game-over-overlay').style.display="flex";
+    document.getElementById('final-score').innerText=score;
+}
+
+async function guardarYReiniciar() {
+    const nombre = document.getElementById('nombre-input').value.trim() || nombreJugador || "Anónimo";
+    nombreJugador = nombre.substring(0,18);
+    actualizarPlayerTag();
+    await guardarPuntaje(nombreJugador, score);
+    reiniciarJuego();
+}
+
+function reiniciarJuego() {
+    score=0; lives=5; juegoActivo=true;
+    document.getElementById('score').innerText="0";
+    actualizarVidas();
+    document.getElementById('game-over-overlay').style.display="none";
+    nuevaPregunta();
+}
+
+document.addEventListener('click', e => {
+    if (!e.target.closest('.autocomplete-container'))
+        document.getElementById('sugerencias').style.display='none';
+});
+
+// Mostrar pantalla de nombre al iniciar
+document.getElementById('name-screen-input').focus();
+cargarRanking();
+</script>
+</body>
+</html>
