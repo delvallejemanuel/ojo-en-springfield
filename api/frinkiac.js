@@ -43,7 +43,7 @@ export default async function handler(req, res) {
                 .replace(/♪/g, '')
                 .trim();
 
-            if (textoVisible.length === 0) continue;
+            if (textoVisible.length === 5) continue;
 
             frame = randomData.Frame;
             break;
