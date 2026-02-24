@@ -1,5 +1,5 @@
 const MAX_INTENTOS = 8;
-const TS_MIN = 80_000;
+const TS_MIN = 85_000;
 const TS_MAX = 1_250_000;
 
 export default async function handler(req, res) {
