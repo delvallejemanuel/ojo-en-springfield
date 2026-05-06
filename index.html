@@ -64,7 +64,6 @@
 </head>
 <body>
 
-<!-- Pantalla inicial: ingreso de nombre -->
 <div id="name-screen">
     <h2>🎯 EL OJO EN SPRINGFIELD</h2>
     <p>¿Cómo te llamás, fanático/a?</p>
@@ -74,7 +73,6 @@
 </div>
 
 <div class="page-layout">
-    <!-- Columna del juego -->
     <div class="game-col">
         <div class="stats-bar">
             <div>VIDAS: <span id="lives">🍩🍩🍩🍩🍩</span></div>
@@ -110,7 +108,6 @@
         <div id="feedback"></div>
     </div>
 
-    <!-- Columna del ranking -->
     <div class="ranking-col">
         <div class="ranking-box">
             <h2>🏆 RANKING</h2>
@@ -470,7 +467,7 @@ const traduccion = {
     "She Used to Be My Girl": "Ella solía ser mi amiga",
     "Fat Man and Little Boy": "El hombre gordo y el niño pequeño",
     "Midnight Rx": "Medicamentos de medianoche",
-    "Mommie Beerest": "Mamá cervecera",
+    "Mommie Beerest": "Mamá osa",
     "Homer and Ned's Hail Mary Pass": "El pase salvador de Homero y Ned",
     "Pranksta Rap": "El rap del bromista",
     "There's Something About Marrying": "El amor es ciego",
@@ -533,9 +530,7 @@ const todosTitulos = [...new Set(Object.values(diccionario))];
 let score = 0, lives = 5, respuestaCorrecta = "", juegoActivo = false;
 let nombreJugador = "";
 
-// ─── PRECARGA ────────────────────────────────────────────────
-// Guarda los datos de la siguiente pregunta mientras el usuario responde la actual
-let cacheSiguiente = null;   // { data, imgEl } — data = respuesta de /api/frinkiac, imgEl = Image precargada
+let cacheSiguiente = null;
 let cargandoSiguiente = false;
 
 function codigoAleatorio() {
@@ -548,11 +543,10 @@ async function precargarSiguiente() {
     cargandoSiguiente = true;
     try {
         const codigo = codigoAleatorio();
-        const res = await fetch(`/api/frinkiac?episode=${codigo}`);
+        const res = await fetch(`/api/frinkiac?episode=${codigo}&score=${score}`);
         if (!res.ok) throw new Error('fetch api');
         const data = await res.json();
 
-        // Precargamos la imagen en un objeto Image oculto
         const imgPreload = new Image();
         const imgUrl = `/api/imagen?episode=${data.Frame.Episode}&timestamp=${data.Frame.Timestamp}`;
 
@@ -564,13 +558,12 @@ async function precargarSiguiente() {
 
         cacheSiguiente = { data, imgUrl };
     } catch (e) {
-        cacheSiguiente = null; // Si falla, la siguiente pregunta la carga normalmente
+        cacheSiguiente = null;
     } finally {
         cargandoSiguiente = false;
     }
 }
 
-// ─── NOMBRE DE JUGADOR ───────────────────────────────────────
 function confirmarNombre() {
     const inp = document.getElementById('name-screen-input');
     const nombre = inp.value.trim();
@@ -600,7 +593,6 @@ function cambiarNombre() {
     }
 }
 
-// ─── RANKING ONLINE (JSONBin) ─────────────────────────────────
 async function leerEntries() {
     const res = await fetch(BIN_URL + '/latest', {
         method: 'GET',
@@ -674,7 +666,6 @@ function escapeHtml(str) {
     return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-// ─── LÓGICA DEL JUEGO ────────────────────────────────────────
 function traducir(titulo_en, codigo) {
     if (titulo_en && traduccion[titulo_en]) return traduccion[titulo_en];
     if (codigo && diccionario[codigo]) return diccionario[codigo];
@@ -728,7 +719,6 @@ function elegir(idx) {
         document.getElementById('score').innerText = score;
         f.innerText = "¡PERFECTIRIJILLO! ✨";
         f.style.color = "var(--yellow)";
-        // Arrancamos la precarga mientras el usuario ve el feedback
         precargarSiguiente();
         setTimeout(nuevaPregunta, 1800);
     } else {
@@ -737,7 +727,6 @@ function elegir(idx) {
         actualizarVidas();
         f.innerHTML = `¡D'OH! Era la correcta 👆`;
         f.style.color = "var(--red)";
-        // Arrancamos la precarga mientras el usuario ve el feedback
         precargarSiguiente();
         if (lives <= 0) setTimeout(finalizarJuego, 2000);
         else setTimeout(nuevaPregunta, 2500);
@@ -763,14 +752,12 @@ async function nuevaPregunta() {
         let data, imgUrl;
 
         if (cacheSiguiente) {
-            // ✅ Usamos lo precargado — la imagen ya está en caché del navegador
             ({ data, imgUrl } = cacheSiguiente);
             cacheSiguiente = null;
             cargandoSiguiente = false;
         } else {
-            // Sin precarga disponible: cargamos normalmente
             const codigo = codigoAleatorio();
-            const res = await fetch(`/api/frinkiac?episode=${codigo}`);
+            const res = await fetch(`/api/frinkiac?episode=${codigo}&score=${score}`);
             if (!res.ok) throw new Error('fetch api');
             data = await res.json();
             imgUrl = `/api/imagen?episode=${data.Frame.Episode}&timestamp=${data.Frame.Timestamp}`;
@@ -778,7 +765,6 @@ async function nuevaPregunta() {
 
         respuestaCorrecta = traducir(data.titulo_en, data.Frame.Episode);
 
-        // Mostramos opciones ANTES de que cargue la imagen
         opcionesActuales = generarOpciones(respuestaCorrecta);
         mostrarOpciones(opcionesActuales);
 
@@ -842,7 +828,6 @@ function reiniciarJuego() {
     nuevaPregunta();
 }
 
-// ─── INICIALIZACIÓN ──────────────────────────────────────────
 const nombreGuardado = localStorage.getItem('ojo_nombre');
 if (nombreGuardado) {
     nombreJugador = nombreGuardado;
