@@ -603,7 +603,7 @@ async function leerEntries() {
     if (!res.ok) { console.warn('leerEntries status:', res.status); return []; }
     const data = await res.json();
     const arr = Array.isArray(data) ? data : (Array.isArray(data.record) ? data.record : []);
-    return arr.filter(e => e && typeof e.name === 'string' && typeof e.score === 'number');
+    return arr.filter(e => e && typeof e.name === 'string' && typeof e.score === 'number' && e.score > 0);
 }
 
 async function escribirEntries(entries) {
