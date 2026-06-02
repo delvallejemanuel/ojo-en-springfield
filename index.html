@@ -638,7 +638,7 @@ async function cargarRanking() {
 
 async function cargarHistorico() {
     try {
-        const res = await fetch(HISTORICO_URL + '/latest', {
+const res = await fetch(HISTORICO_URL + '/latest?nocache=' + Date.now(), {
             headers: { 'X-Master-Key': JSONBIN_KEY, 'X-Bin-Meta': 'false' }
         });
         if (!res.ok) throw new Error('Error cargando histórico');
