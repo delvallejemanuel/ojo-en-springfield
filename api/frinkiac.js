@@ -1,4 +1,4 @@
-const MAX_INTENTOS = 25;
+const MAX_INTENTOS = 20;
 const TS_MIN = 80_000;
 const TS_MAX = 1_300_000;
 
