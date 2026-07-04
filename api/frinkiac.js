@@ -1,6 +1,6 @@
 const MAX_INTENTOS = 25;
 const TS_MIN = 80_000;
-const TS_MAX = 1_250_000;
+const TS_MAX = 1_300_000;
 
 export default async function handler(req, res) {
     res.setHeader('Access-Control-Allow-Origin', '*');
